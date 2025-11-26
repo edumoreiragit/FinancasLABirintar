@@ -1,0 +1,5 @@
+{
+  "name": "Finanças LABirintar",
+  "description": "Sistema de gestão financeira integrado com Google Sheets e Gemini AI para automação de lançamentos contábeis.",
+  "requestFramePermissions": []
+}
