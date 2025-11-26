@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Finanças LABirintar</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -25,26 +27,43 @@
         }
       }
     </script>
+    
     <style>
       body {
         background-color: #f4f0e8;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       }
+      /* Simple animation utilities */
+      .animate-fade-in {
+        animation: fadeIn 0.5s ease-in-out;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
     </style>
-  <script type="importmap">
+
+    <!-- Import Map for Modules -->
+    <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.0",
-    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6"
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3",
+    "recharts": "https://esm.sh/recharts@2.12.3?external=react,react-dom",
+    "@google/genai": "https://esm.sh/@google/genai@0.1.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
   }
 }
 </script>
-</head>
+
+    <!-- Babel Standalone for compiling JSX in browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
   <body>
     <div id="root"></div>
+
+    <!-- Entry Point - Note type="text/babel" and data-type="module" -->
+    <script type="text/babel" data-type="module" src="./index.js"></script>
   </body>
 </html>
