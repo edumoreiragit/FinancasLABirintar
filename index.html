@@ -1,50 +1,63 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Finanças LABirintar</title>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              lab: {
-                goiaba: '#ff595a',
-                laranja: '#ffa400',
-                areia: '#f4f0e8',
-                creme: '#ffe9c9',
-                lavanda: '#e6cbe4',
-                hortencia: '#aec5e7',
-                menta: '#b2dcd5',
-                chocolate: '#bf917f',
-              }
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Finanças LABirintar</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            lab: {
+              goiaba: '#ff595a',
+              laranja: '#ffa400',
+              areia: '#f4f0e8',
+              creme: '#ffe9c9',
+              lavanda: '#e6cbe4',
+              hortencia: '#aec5e7',
+              menta: '#b2dcd5',
+              chocolate: '#bf917f',
             }
           }
         }
       }
-    </script>
-    
-    <style>
-      body {
-        background-color: #f4f0e8;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      }
-      /* Simple animation utilities */
-      .animate-fade-in {
-        animation: fadeIn 0.5s ease-in-out;
-      }
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-    </style>
+    }
+  </script>
 
-    <!-- Import Map for Modules -->
-    <script type="importmap">
+  <style>
+    body {
+      background-color: #f4f0e8;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease-in-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f4f0e8; 
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #aec5e7; 
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #ffa400; 
+    }
+  </style>
+
+  <!-- Import Map: Defines where to load libraries from -->
+  <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@18.2.0",
@@ -57,13 +70,582 @@
 }
 </script>
 
-    <!-- Babel Standalone for compiling JSX in browser -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  </head>
-  <body>
-    <div id="root"></div>
+  <!-- Babel for JSX compilation in browser -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
 
-    <!-- Entry Point - Note type="text/babel" and data-type="module" -->
-    <script type="text/babel" data-type="module" src="./index.js"></script>
-  </body>
+  <!-- MAIN APPLICATION SCRIPT -->
+  <script type="text/babel" data-type="module">
+    import React, { useState, useEffect, useRef } from 'react';
+    import ReactDOM from 'react-dom/client';
+    import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+    import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
+    import { GoogleGenAI, Type } from "@google/genai";
+
+    // --- CONFIGURATION ---
+    
+    // MOCK PROCESS ENV FOR BROWSER (PROTOYPE ONLY)
+    // ATENÇÃO: Substitua a string abaixo pela sua API Key para testar.
+    // Em produção real, isso viria de um servidor seguro.
+    window.process = {
+      env: {
+        API_KEY: '' // <--- INSIRA SUA API KEY AQUI DENTRO DAS ASPAS
+      }
+    };
+
+    const APP_NAME = "Finanças LABirintar";
+    
+    const COLORS = {
+      goiaba: '#ff595a',
+      laranja: '#ffa400',
+      areia: '#f4f0e8',
+      creme: '#ffe9c9',
+      lavanda: '#e6cbe4',
+      hortencia: '#aec5e7',
+      menta: '#b2dcd5',
+      chocolate: '#bf917f',
+    };
+
+    const PLANO_DE_CONTAS_SUGESTAO = [
+      "Banco Inter",
+      "Banco do Brasil",
+      "Caixa",
+      "Clientes a Receber",
+      "Fornecedores a Pagar",
+      "Despesas Administrativas",
+      "Despesas com Pessoal",
+      "Receita de Serviços",
+      "Impostos a Recolher",
+      "Sócios - Capital Social",
+      "Sócios - Conta Corrente",
+      "A Classificar"
+    ];
+
+    // --- SERVICES ---
+
+    // Initialize AI
+    // Note: We check if key exists to prevent crash, but user needs to add it.
+    let ai;
+    try {
+      if (process.env.API_KEY) {
+        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      }
+    } catch (e) {
+      console.warn("API Key not set correctly.");
+    }
+
+    const parseStatementWithGemini = async (base64Pdf, mimeType) => {
+      if (!ai) throw new Error("API Key não configurada no código (index.html).");
+
+      const modelId = "gemini-2.5-flash"; 
+      
+      const prompt = `
+        Você é um assistente contábil experiente para a empresa "LABirintar".
+        Analise o extrato bancário fornecido (PDF) e extraia todas as transações financeiras.
+        
+        Para cada transação, você deve gerar um objeto JSON com os seguintes campos:
+        
+        1. 'date': Data no formato YYYY-MM-DD.
+        2. 'description': A descrição original do extrato.
+        3. 'value': O valor numérico (positivo para entradas, negativo para saídas).
+        4. 'historico': Um resumo curto e profissional do evento (ex: "Pagamento Fornecedor X", "Recebimento Cliente Y").
+        5. 'fonte': A conta de Origem (Crédito). 
+           - Se valor < 0 (saída): A fonte é geralmente a conta bancária (ex: "Banco Inter").
+           - Se valor > 0 (entrada): A fonte é geralmente uma conta de receita ou cliente (ex: "Cliente a Receber", "Receita de Vendas"). Tente inferir pelo texto.
+        6. 'aplicacao': A conta de Destino (Débito).
+           - Se valor < 0 (saída): A aplicação é a despesa ou fornecedor (ex: "Despesas Administrativas", "Fornecedores"). Tente inferir pelo texto.
+           - Se valor > 0 (entrada): A aplicação é a conta bancária (ex: "Banco Inter").
+
+        Regras Importantes:
+        - O valor deve ser float.
+        - Tente padronizar os nomes das contas (Fonte/Aplicação) baseado em práticas contábeis comuns.
+        - Se não tiver certeza da conta, use "A Classificar".
+      `;
+
+      try {
+        const response = await ai.models.generateContent({
+          model: modelId,
+          contents: {
+            parts: [
+              { inlineData: { mimeType: mimeType, data: base64Pdf } },
+              { text: prompt }
+            ]
+          },
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  date: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  value: { type: Type.NUMBER },
+                  historico: { type: Type.STRING },
+                  fonte: { type: Type.STRING },
+                  aplicacao: { type: Type.STRING },
+                }
+              }
+            }
+          }
+        });
+
+        const jsonText = response.text || "[]";
+        const rawData = JSON.parse(jsonText);
+
+        return rawData.map((item, index) => ({
+          id: `trans_${Date.now()}_${index}`,
+          date: item.date,
+          description: item.description,
+          value: item.value,
+          historico: item.historico,
+          fonte: item.fonte,
+          aplicacao: item.aplicacao,
+          status: 'pending'
+        }));
+
+      } catch (error) {
+        console.error("Error parsing PDF with Gemini:", error);
+        throw new Error("Falha ao processar o extrato. Verifique a API Key e o arquivo.");
+      }
+    };
+
+    // --- COMPONENTS ---
+
+    const TransactionTable = ({ transactions, onUpdate, onDelete }) => {
+      if (transactions.length === 0) return null;
+
+      return (
+        <div className="overflow-x-auto shadow-md sm:rounded-lg mt-6 bg-white">
+          <table className="w-full text-sm text-left text-gray-700">
+            <thead className="text-xs text-white uppercase bg-lab-goiaba">
+              <tr>
+                <th scope="col" className="px-4 py-3">Data</th>
+                <th scope="col" className="px-4 py-3">Descrição Original</th>
+                <th scope="col" className="px-4 py-3">Valor</th>
+                <th scope="col" className="px-4 py-3">Aplicação (Débito)</th>
+                <th scope="col" className="px-4 py-3">Fonte (Crédito)</th>
+                <th scope="col" className="px-4 py-3">Histórico</th>
+                <th scope="col" className="px-4 py-3 text-center">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((t) => (
+                <tr key={t.id} className="border-b hover:bg-lab-areia/50 transition-colors">
+                  <td className="px-4 py-3">
+                    <input 
+                      type="date" 
+                      value={t.date} 
+                      onChange={(e) => onUpdate(t.id, 'date', e.target.value)}
+                      className="bg-transparent border-b border-gray-300 focus:border-lab-laranja outline-none w-28"
+                    />
+                  </td>
+                  <td className="px-4 py-3 max-w-xs truncate text-gray-500" title={t.description}>
+                    {t.description}
+                  </td>
+                  <td className={`px-4 py-3 font-semibold ${t.value < 0 ? 'text-lab-goiaba' : 'text-lab-menta'}`}>
+                    R$ {t.value.toFixed(2)}
+                  </td>
+                  <td className="px-4 py-3">
+                     <input 
+                      list="accounts-list"
+                      value={t.aplicacao}
+                      onChange={(e) => onUpdate(t.id, 'aplicacao', e.target.value)}
+                      className="bg-white border border-gray-200 rounded px-2 py-1 text-xs w-full focus:ring-1 focus:ring-lab-laranja"
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input 
+                      list="accounts-list"
+                      value={t.fonte}
+                      onChange={(e) => onUpdate(t.id, 'fonte', e.target.value)}
+                      className="bg-white border border-gray-200 rounded px-2 py-1 text-xs w-full focus:ring-1 focus:ring-lab-laranja"
+                    />
+                  </td>
+                   <td className="px-4 py-3">
+                    <input 
+                      type="text"
+                      value={t.historico}
+                      onChange={(e) => onUpdate(t.id, 'historico', e.target.value)}
+                      className="bg-transparent border-b border-gray-300 focus:border-lab-laranja outline-none w-full"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button 
+                      onClick={() => onDelete(t.id)}
+                      className="text-gray-400 hover:text-red-600 transition-colors"
+                      title="Remover linha"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <datalist id="accounts-list">
+            {PLANO_DE_CONTAS_SUGESTAO.map(acc => (
+              <option key={acc} value={acc} />
+            ))}
+          </datalist>
+        </div>
+      );
+    };
+
+    const Dashboard = () => {
+      // Mock data
+      const dataPie = [
+        { name: 'Receita Serviços', value: 12500 },
+        { name: 'Investimento', value: 5000 },
+      ];
+
+      const dataBar = [
+        { name: 'Jan', receita: 4000, despesa: 2400 },
+        { name: 'Fev', receita: 3000, despesa: 1398 },
+        { name: 'Mar', receita: 9800, despesa: 9800 },
+        { name: 'Abr', receita: 3908, despesa: 4800 },
+        { name: 'Mai', receita: 4800, despesa: 3800 },
+        { name: 'Jun', receita: 3800, despesa: 4300 },
+      ];
+
+      const pieColors = [COLORS.menta, COLORS.laranja];
+
+      return (
+        <div className="p-6 max-w-7xl mx-auto animate-fade-in">
+           <h1 className="text-3xl font-bold text-gray-800 mb-2">Visão Geral</h1>
+           <p className="text-gray-500 mb-8">Bem-vindo ao Finanças LABirintar.</p>
+
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-lab-menta">
+                <h3 className="text-sm font-semibold text-gray-400 uppercase">Receita (Mês Atual)</h3>
+                <p className="text-2xl font-bold text-gray-800 mt-2">R$ 17.500,00</p>
+              </div>
+              <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-lab-goiaba">
+                 <h3 className="text-sm font-semibold text-gray-400 uppercase">Despesas (Mês Atual)</h3>
+                 <p className="text-2xl font-bold text-gray-800 mt-2">R$ 8.350,20</p>
+              </div>
+              <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-lab-laranja">
+                 <h3 className="text-sm font-semibold text-gray-400 uppercase">Resultado</h3>
+                 <p className="text-2xl font-bold text-green-600 mt-2">R$ 9.149,80</p>
+              </div>
+           </div>
+
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="bg-white p-6 rounded-xl shadow-sm">
+                <h3 className="text-lg font-bold text-gray-700 mb-4">Fluxo de Caixa (Semestral)</h3>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dataBar}>
+                      <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$${value}`} />
+                      <Tooltip 
+                        cursor={{fill: COLORS.areia}}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      />
+                      <Legend />
+                      <Bar dataKey="receita" fill={COLORS.menta} radius={[4, 4, 0, 0]} name="Entradas" />
+                      <Bar dataKey="despesa" fill={COLORS.goiaba} radius={[4, 4, 0, 0]} name="Saídas" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl shadow-sm">
+                <h3 className="text-lg font-bold text-gray-700 mb-4">Composição de Receitas</h3>
+                <div className="h-64 flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={dataPie}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {dataPie.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend verticalAlign="bottom" height={36}/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+           </div>
+        </div>
+      );
+    };
+
+    const ImportEntry = () => {
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState(null);
+      const [transactions, setTransactions] = useState([]);
+      const [successMessage, setSuccessMessage] = useState(null);
+      const fileInputRef = useRef(null);
+
+      const handleFileUpload = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        
+        // Basic check for API key
+        if (!process.env.API_KEY || process.env.API_KEY === '') {
+          setError("Erro: API Key não encontrada. Abra o arquivo index.html e adicione sua chave na variável window.process.env.API_KEY");
+          return;
+        }
+
+        if (file.type !== 'application/pdf') {
+          setError("Por favor, selecione um arquivo PDF.");
+          return;
+        }
+
+        setLoading(true);
+        setError(null);
+        setTransactions([]);
+        setSuccessMessage(null);
+
+        try {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = async () => {
+            const base64Data = reader.result.split(',')[1];
+            try {
+              const parsedTransactions = await parseStatementWithGemini(base64Data, file.type);
+              setTransactions(parsedTransactions);
+            } catch (err) {
+              setError(err.message || "Erro ao processar arquivo");
+            } finally {
+              setLoading(false);
+            }
+          };
+          reader.onerror = () => {
+            setError("Erro ao ler o arquivo.");
+            setLoading(false);
+          };
+        } catch (e) {
+          console.error(e);
+          setLoading(false);
+          setError("Erro inesperado.");
+        }
+      };
+
+      const handleUpdateTransaction = (id, field, value) => {
+        setTransactions(prev => prev.map(t => 
+          t.id === id ? { ...t, [field]: value } : t
+        ));
+      };
+
+      const handleDeleteTransaction = (id) => {
+        setTransactions(prev => prev.filter(t => t.id !== id));
+      };
+
+      const handleExportToSheets = () => {
+        setLoading(true);
+        setTimeout(() => {
+            const csvContent = "data:text/csv;charset=utf-8," 
+                + "Data,Aplicação,Fonte,Histórico,Valor\n"
+                + transactions.map(t => 
+                    `${t.date},${t.aplicacao},${t.fonte},${t.historico},${t.value}`
+                ).join("\n");
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "lancamentos_diario_labirintar.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            setSuccessMessage("Dados processados! CSV gerado para importação.");
+            setLoading(false);
+        }, 1500);
+      };
+
+      return (
+        <div className="p-6 max-w-7xl mx-auto animate-fade-in">
+          <header className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-800">Importação de Extrato</h1>
+            <p className="text-gray-600 mt-2">
+              Carregue o PDF do extrato bancário. A IA irá identificar as contas de Fonte e Aplicação.
+            </p>
+          </header>
+
+          <div className="bg-white p-8 rounded-xl shadow-sm border-2 border-dashed border-lab-hortencia hover:border-lab-laranja transition-colors text-center">
+            <input 
+              type="file" 
+              accept="application/pdf" 
+              onChange={handleFileUpload} 
+              className="hidden" 
+              ref={fileInputRef}
+              id="file-upload"
+            />
+            <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center justify-center">
+              <div className="w-16 h-16 bg-lab-areia rounded-full flex items-center justify-center mb-4 text-lab-goiaba">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+              </div>
+              <span className="text-lg font-medium text-gray-700">Clique para selecionar o PDF</span>
+              <span className="text-sm text-gray-400 mt-1">Extrato bancário (PDF)</span>
+            </label>
+          </div>
+
+          {loading && (
+            <div className="mt-8 flex flex-col items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-lab-goiaba mb-4"></div>
+                <p className="text-lab-chocolate animate-pulse">Lendo extrato e categorizando lançamentos...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+              <strong className="font-bold">Erro: </strong>
+              <span className="block sm:inline">{error}</span>
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="mt-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+              <strong className="font-bold">Sucesso! </strong>
+              <span className="block sm:inline">{successMessage}</span>
+            </div>
+          )}
+
+          {transactions.length > 0 && !loading && (
+            <div className="mt-8 animate-fade-in">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-800">
+                  Validação dos Lançamentos ({transactions.length})
+                </h2>
+                <button
+                  onClick={handleExportToSheets}
+                  className="bg-lab-goiaba hover:bg-red-600 text-white font-bold py-2 px-6 rounded-full shadow-lg transform hover:scale-105 transition-all flex items-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                  </svg>
+                  Enviar para Diário
+                </button>
+              </div>
+              
+              <TransactionTable 
+                transactions={transactions} 
+                onUpdate={handleUpdateTransaction}
+                onDelete={handleDeleteTransaction}
+              />
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const SidebarLink = ({ to, icon, label }) => {
+      const location = useLocation();
+      const isActive = location.pathname === to;
+      return (
+        <Link 
+          to={to} 
+          className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors mb-2 ${
+            isActive 
+              ? 'bg-lab-goiaba text-white shadow-md' 
+              : 'text-gray-600 hover:bg-lab-lavanda/50'
+          }`}
+        >
+          {icon}
+          <span className="font-medium">{label}</span>
+        </Link>
+      );
+    };
+
+    const Layout = ({ children }) => {
+      return (
+        <div className="flex h-screen bg-lab-areia">
+          {/* Sidebar */}
+          <aside className="w-64 bg-white border-r border-gray-200 hidden md:flex flex-col">
+            <div className="p-6 border-b border-gray-100 flex items-center gap-2">
+                <div className="w-8 h-8 bg-lab-laranja rounded-lg flex items-center justify-center text-white font-bold">L</div>
+                <span className="text-xl font-bold text-gray-800 tracking-tight">LABirintar</span>
+            </div>
+            
+            <nav className="flex-1 p-4 overflow-y-auto">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 px-4">Menu</p>
+              
+              <SidebarLink 
+                to="/" 
+                label="Dashboard" 
+                icon={
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+                  </svg>
+                } 
+              />
+              
+              <SidebarLink 
+                to="/import" 
+                label="Lançar Extrato" 
+                icon={
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6" />
+                  </svg>
+                } 
+              />
+
+               <div className="mt-8 border-t border-gray-100 pt-4">
+                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4 px-4">Configurações</p>
+                 <div className="px-4 py-2 text-sm text-gray-500">
+                   <div className="flex items-center gap-2 mb-2">
+                     <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                     Google Sheets
+                   </div>
+                 </div>
+               </div>
+            </nav>
+          </aside>
+
+          {/* Main Content */}
+          <main className="flex-1 overflow-auto relative">
+            {/* Mobile Header */}
+            <div className="md:hidden bg-white p-4 flex items-center justify-between shadow-sm sticky top-0 z-10">
+              <span className="font-bold text-gray-800">LABirintar</span>
+              <div className="flex gap-4">
+                 <Link to="/" className="text-gray-600">Home</Link>
+                 <Link to="/import" className="text-gray-600">Importar</Link>
+              </div>
+            </div>
+
+            {children}
+          </main>
+        </div>
+      );
+    };
+
+    // --- APP ENTRY POINT ---
+
+    const App = () => {
+      return (
+        <HashRouter>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/import" element={<ImportEntry />} />
+            </Routes>
+          </Layout>
+        </HashRouter>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
+  </script>
+</body>
 </html>
